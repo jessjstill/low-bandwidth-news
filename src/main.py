@@ -19,7 +19,7 @@ load_dotenv()
 CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
 
 if not CLAUDE_API_KEY:
-    print("❌ Error: CLAUDE_API_KEY not found.")
+    print("Error: CLAUDE_API_KEY not found.")
     print("   Please create a .env file in the project root with:")
     print("   CLAUDE_API_KEY=sk-ant-api03-YOUR_KEY_HERE")
     sys.exit(1)
@@ -60,7 +60,7 @@ def fetch_rss(url: str, category: str, source_name: str, max_items: int = 3) -> 
         
         return articles
     except Exception as e:
-        print(f"   ⚠️ Error: {str(e)}")
+        print(f"   Warning: {str(e)}")
         return []
 
 
@@ -89,7 +89,7 @@ def fetch_atom(url: str, category: str, source_name: str, max_items: int = 5) ->
         
         return articles
     except Exception as e:
-        print(f"   ⚠️ Error: {str(e)}")
+        print(f"   Warning: {str(e)}")
         return []
 
 
@@ -114,7 +114,7 @@ def fetch_podcast(url: str, category: str, source_name: str, max_items: int = 3)
         
         return articles
     except Exception as e:
-        print(f"   ⚠️ Error: {str(e)}")
+        print(f"   Warning: {str(e)}")
         return []
 
 
@@ -134,7 +134,7 @@ def fetch_scrape(url: str, category: str, source_name: str) -> list:
                 }]
         return []
     except Exception as e:
-        print(f"   ⚠️ Error: {str(e)}")
+        print(f"   Warning: {str(e)}")
         return []
 
 
@@ -211,7 +211,7 @@ ARTICLES:
         return articles
         
     except anthropic.APIError as e:
-        print(f"❌ Claude API Error: {e}")
+        print(f"Claude API Error: {e}")
         for article in articles:
             article['summary'] = "Error generating summary"
         return articles
@@ -223,8 +223,8 @@ def escape_markdown(text: str) -> str:
 
 
 def main():
-    print("🚀 Starting News Aggregator...")
-    print(f"📅 Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    print("Starting News Aggregator...")
+    print(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     print("-" * 50)
 
     # Locate CSV file relative to script
@@ -232,13 +232,13 @@ def main():
     csv_path = os.path.join(base_dir, 'data', 'feeds.csv')
 
     if not os.path.exists(csv_path):
-        print(f"❌ Error: Could not find {csv_path}")
+        print(f"Error: Could not find {csv_path}")
         print("   Make sure feeds.csv is in the 'data' folder.")
         return
 
     # Read feeds
     df = pd.read_csv(csv_path)
-    print(f"📊 Loaded {len(df)} feed sources\n")
+    print(f"Loaded {len(df)} feed sources\n")
 
     # Fetch all articles
     all_articles = []
@@ -252,21 +252,21 @@ def main():
         if pd.isna(feed_type) or feed_type == '':
             feed_type = 'rss'
         
-        print(f"📡 Fetching: {source_name} ({feed_type})...")
+        print(f"Fetching: {source_name} ({feed_type})...")
         
         articles = fetch_content(url, feed_type, category, source_name)
         print(f"   Found {len(articles)} items")
         all_articles.extend(articles)
 
-    print(f"\n📈 Total articles fetched: {len(all_articles)}")
+    print(f"\nTotal articles fetched: {len(all_articles)}")
     print("-" * 50)
 
     if not all_articles:
-        print("❌ No articles found. Check your feed URLs.")
+        print("No articles found. Check your feed URLs.")
         return
 
     # Generate summaries with Claude
-    print("🧠 Generating summaries with Claude...")
+    print("Generating summaries with Claude...")
     print("   (This may take a moment...)")
     
     # Process in batches of 20 to avoid token limits
@@ -277,7 +277,7 @@ def main():
         generate_summaries(batch)
 
     # Build Markdown table
-    print("\n📝 Building Markdown table...")
+    print("\nBuilding Markdown table...")
     
     # Sort by category
     all_articles.sort(key=lambda x: x['category'])
@@ -297,9 +297,11 @@ def main():
         
         table_lines.append(f"| {category} | {source} | {title} | {summary} | [Link]({link}) |")
 
-    # Generate output
+    # Generate output to Daily Briefings folder
     today = datetime.now().strftime("%Y-%m-%d")
-    filename = os.path.join(base_dir, f"Daily_Briefing_{today}.md")
+    briefings_dir = os.path.join(base_dir, "Daily Briefings")
+    os.makedirs(briefings_dir, exist_ok=True)
+    filename = os.path.join(briefings_dir, f"{today}.md")
 
     with open(filename, "w", encoding="utf-8") as f:
         f.write(f"# 🗞️ Daily Briefing: {today}\n\n")
@@ -309,8 +311,8 @@ def main():
         f.write("\n".join(table_lines))
         f.write("\n")
 
-    print(f"\n✅ Success! Created {filename}")
-    print(f"📄 {len(all_articles)} articles summarized.")
+    print(f"\nSuccess! Created {filename}")
+    print(f"{len(all_articles)} articles summarized.")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,36 @@
+name: Daily Briefing
+
+on:
+  schedule:
+    # Runs at 7 AM UTC daily
+    - cron: '0 7 * * *'
+  workflow_dispatch:  # Allows manual trigger from GitHub
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Generate daily briefing
+        env:
+          CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
+        run: python src/main.py
+
+      - name: Commit and push briefing
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add "Daily Briefings/"
+          git diff --staged --quiet || git commit -m "Daily briefing for $(date +%Y-%m-%d)"
+          git push
