@@ -1,0 +1,6 @@
+pandas
+feedparser
+requests
+anthropic
+trafilatura
+python-dotenv

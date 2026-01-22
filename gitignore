@@ -1,0 +1,25 @@
+# Environment variables (NEVER commit your API key!)
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Project specific
+*.log
+
+# Keep briefings but ignore old ones (optional)
+# Daily_Briefing_*.md
