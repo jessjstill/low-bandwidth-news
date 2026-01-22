@@ -16,7 +16,8 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 
-# Timezone for display
+# Timezones
+UTC = ZoneInfo("UTC")
 EST = ZoneInfo("America/New_York")
 
 # Load environment variables
@@ -43,24 +44,28 @@ def clean_html(text: str) -> str:
 
 
 def parse_pub_date(entry) -> datetime | None:
-    """Extract publication date from a feed entry."""
+    """Extract publication date from a feed entry and return as UTC-aware datetime."""
     # Try different date fields
     for field in ['published_parsed', 'updated_parsed', 'created_parsed']:
         parsed = getattr(entry, field, None)
         if parsed:
             try:
-                return datetime(*parsed[:6])
+                # feedparser returns time structs in UTC, create UTC-aware datetime
+                return datetime(*parsed[:6], tzinfo=UTC)
             except:
                 pass
     return None
 
 
 def is_today(pub_date: datetime | None) -> bool:
-    """Check if a publication date is from today (EST)."""
+    """Check if a publication date is from today (UTC midnight-to-midnight)."""
     if not pub_date:
         return False
-    today = datetime.now(EST).date()
-    return pub_date.date() == today
+    today_utc = datetime.now(UTC).date()
+    # Ensure we're comparing in UTC
+    if pub_date.tzinfo is None:
+        pub_date = pub_date.replace(tzinfo=UTC)
+    return pub_date.astimezone(UTC).date() == today_utc
 
 
 def format_pub_date(pub_date: datetime | None) -> str:
@@ -69,7 +74,9 @@ def format_pub_date(pub_date: datetime | None) -> str:
         return "N/A"
     # Convert to EST for display
     try:
-        pub_est = pub_date.replace(tzinfo=ZoneInfo("UTC")).astimezone(EST)
+        if pub_date.tzinfo is None:
+            pub_date = pub_date.replace(tzinfo=UTC)
+        pub_est = pub_date.astimezone(EST)
         return pub_est.strftime("%m-%d-%Y / %H:%M EST")
     except:
         return pub_date.strftime("%m-%d-%Y / %H:%M")
@@ -184,7 +191,7 @@ def fetch_scrape(url: str, category: str, source_name: str) -> list:
                     'title': f"{source_name} - Latest",
                     'link': url,
                     'raw_content': text[:800],
-                    'pub_date': datetime.now()  # Assume scraped content is current
+                    'pub_date': datetime.now(UTC)  # Assume scraped content is current
                 }]
         return []
     except Exception as e:
@@ -278,7 +285,7 @@ def escape_markdown(text: str) -> str:
 
 def main():
     print("Starting News Aggregator...")
-    print(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    print(f"Date: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M')} UTC")
     print("-" * 50)
 
     # Locate CSV file relative to script
@@ -353,14 +360,24 @@ def main():
         table_lines.append(f"| {pub_date_str} | {category} | {source} | {title} | {summary} | [Link]({link}) |")
 
     # Generate output to Daily Briefings folder
-    today = datetime.now().strftime("%Y-%m-%d")
+    # Archive dates: 2025-01-20 to 2026-01-20 go in Archive subfolder
+    # Current dates: 2026-01-21 onwards go in main Daily Briefings folder
+    today_date = datetime.now(UTC).date()
+    today = today_date.strftime("%Y-%m-%d")
+
+    archive_start = datetime(2025, 1, 20, tzinfo=UTC).date()
+    archive_end = datetime(2026, 1, 20, tzinfo=UTC).date()
+
     briefings_dir = os.path.join(base_dir, "Daily Briefings")
+    if archive_start <= today_date <= archive_end:
+        briefings_dir = os.path.join(briefings_dir, "Archive")
+
     os.makedirs(briefings_dir, exist_ok=True)
     filename = os.path.join(briefings_dir, f"{today}.md")
 
     with open(filename, "w", encoding="utf-8") as f:
         f.write(f"# 🗞️ Daily Briefing: {today}\n\n")
-        f.write(f"*Generated at {datetime.now().strftime('%H:%M')} UTC*\n\n")
+        f.write(f"*Generated at {datetime.now(UTC).strftime('%H:%M')} UTC*\n\n")
         f.write(f"**Total Articles:** {len(all_articles)}\n\n")
         f.write("---\n\n")
         f.write("\n".join(table_lines))
