@@ -7,12 +7,17 @@ Outputs a Markdown table with one row per article.
 import os
 import sys
 import re
+import time
 import pandas as pd
 import feedparser
 import anthropic
 import trafilatura
-from datetime import datetime
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
+
+# Timezone for display
+EST = ZoneInfo("America/New_York")
 
 # Load environment variables
 load_dotenv()
@@ -37,81 +42,129 @@ def clean_html(text: str) -> str:
     return text.strip()
 
 
-def fetch_rss(url: str, category: str, source_name: str, max_items: int = 3) -> list:
-    """Fetch standard RSS/Atom feeds. Returns list of article dicts."""
+def parse_pub_date(entry) -> datetime | None:
+    """Extract publication date from a feed entry."""
+    # Try different date fields
+    for field in ['published_parsed', 'updated_parsed', 'created_parsed']:
+        parsed = getattr(entry, field, None)
+        if parsed:
+            try:
+                return datetime(*parsed[:6])
+            except:
+                pass
+    return None
+
+
+def is_today(pub_date: datetime | None) -> bool:
+    """Check if a publication date is from today (EST)."""
+    if not pub_date:
+        return False
+    today = datetime.now(EST).date()
+    return pub_date.date() == today
+
+
+def format_pub_date(pub_date: datetime | None) -> str:
+    """Format publication date as MM-DD-YYYY / HH:MM EST."""
+    if not pub_date:
+        return "N/A"
+    # Convert to EST for display
+    try:
+        pub_est = pub_date.replace(tzinfo=ZoneInfo("UTC")).astimezone(EST)
+        return pub_est.strftime("%m-%d-%Y / %H:%M EST")
+    except:
+        return pub_date.strftime("%m-%d-%Y / %H:%M")
+
+
+def fetch_rss(url: str, category: str, source_name: str, max_items: int = 20) -> list:
+    """Fetch standard RSS/Atom feeds. Returns list of article dicts from today only."""
     try:
         feed = feedparser.parse(url)
         if feed.bozo and not feed.entries:
             return []
-        
+
         articles = []
         for entry in feed.entries[:max_items]:
+            pub_date = parse_pub_date(entry)
+            if not is_today(pub_date):
+                continue
+
             title = getattr(entry, 'title', 'No Title')
             link = getattr(entry, 'link', url)
             summary = clean_html(getattr(entry, 'summary', ''))[:500]
-            
+
             articles.append({
                 'category': category,
                 'source': source_name,
                 'title': title,
                 'link': link,
-                'raw_content': summary
+                'raw_content': summary,
+                'pub_date': pub_date
             })
-        
+
         return articles
     except Exception as e:
         print(f"   Warning: {str(e)}")
         return []
 
 
-def fetch_atom(url: str, category: str, source_name: str, max_items: int = 5) -> list:
-    """Fetch Atom feeds (like ArXiv API). Returns list of article dicts."""
+def fetch_atom(url: str, category: str, source_name: str, max_items: int = 20) -> list:
+    """Fetch Atom feeds (like ArXiv API). Returns list of article dicts from today only."""
     try:
         feed = feedparser.parse(url)
         articles = []
-        
+
         for entry in feed.entries[:max_items]:
+            pub_date = parse_pub_date(entry)
+            if not is_today(pub_date):
+                continue
+
             title = getattr(entry, 'title', 'No Title')
             link = getattr(entry, 'link', '')
             authors = ', '.join([a.get('name', '') for a in getattr(entry, 'authors', [])])
             summary = clean_html(getattr(entry, 'summary', ''))[:500]
-            
+
             # Include authors in raw content for context
             raw = f"Authors: {authors}. {summary}" if authors else summary
-            
+
             articles.append({
                 'category': category,
                 'source': source_name,
                 'title': title,
                 'link': link,
-                'raw_content': raw
+                'raw_content': raw,
+                'pub_date': pub_date
             })
-        
+
         return articles
     except Exception as e:
         print(f"   Warning: {str(e)}")
         return []
 
 
-def fetch_podcast(url: str, category: str, source_name: str, max_items: int = 3) -> list:
-    """Fetch podcast RSS feeds. Returns list of episode dicts."""
+def fetch_podcast(url: str, category: str, source_name: str, max_items: int = 20) -> list:
+    """Fetch podcast RSS feeds. Returns list of episode dicts from today only."""
     try:
         feed = feedparser.parse(url)
         articles = []
-        
+
         for entry in feed.entries[:max_items]:
+            pub_date = parse_pub_date(entry)
+            if not is_today(pub_date):
+                continue
+
             title = getattr(entry, 'title', 'No Title')
             link = getattr(entry, 'link', '')
             description = clean_html(getattr(entry, 'summary', getattr(entry, 'description', '')))[:500]
-            
+
             articles.append({
                 'category': category,
                 'source': source_name,
                 'title': title,
                 'link': link,
-                'raw_content': description
+                'raw_content': description,
+                'pub_date': pub_date
             })
-        
+
         return articles
     except Exception as e:
         print(f"   Warning: {str(e)}")
@@ -130,7 +183,8 @@ def fetch_scrape(url: str, category: str, source_name: str) -> list:
                     'source': source_name,
                     'title': f"{source_name} - Latest",
                     'link': url,
-                    'raw_content': text[:800]
+                    'raw_content': text[:800],
+                    'pub_date': datetime.now()  # Assume scraped content is current
                 }]
         return []
     except Exception as e:
@@ -279,23 +333,24 @@ def main():
     # Build Markdown table
     print("\nBuilding Markdown table...")
     
-    # Sort by category
-    all_articles.sort(key=lambda x: x['category'])
+    # Sort by publication date (newest first), then by category
+    all_articles.sort(key=lambda x: (x.get('pub_date') or datetime.min), reverse=True)
     
     # Create table
     table_lines = [
-        "| Category | Source | Title | Summary | Link |",
-        "|----------|--------|-------|---------|------|"
+        "| Date/Time | Category | Source | Title | Summary | Link |",
+        "|-----------|----------|--------|-------|---------|------|"
     ]
-    
+
     for article in all_articles:
+        pub_date_str = format_pub_date(article.get('pub_date'))
         category = escape_markdown(article['category'])
         source = escape_markdown(article['source'])
         title = escape_markdown(article['title'][:60] + '...' if len(article['title']) > 60 else article['title'])
         summary = escape_markdown(article.get('summary', 'N/A'))
         link = article['link']
-        
-        table_lines.append(f"| {category} | {source} | {title} | {summary} | [Link]({link}) |")
+
+        table_lines.append(f"| {pub_date_str} | {category} | {source} | {title} | {summary} | [Link]({link}) |")
 
     # Generate output to Daily Briefings folder
     today = datetime.now().strftime("%Y-%m-%d")
