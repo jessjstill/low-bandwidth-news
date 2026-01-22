@@ -16,9 +16,8 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 
-# Timezones
+# Timezone
 UTC = ZoneInfo("UTC")
-EST = ZoneInfo("America/New_York")
 
 # Load environment variables
 load_dotenv()
@@ -69,15 +68,14 @@ def is_today(pub_date: datetime | None) -> bool:
 
 
 def format_pub_date(pub_date: datetime | None) -> str:
-    """Format publication date as MM-DD-YYYY / HH:MM EST."""
+    """Format publication date as MM-DD-YYYY / HH:MM UTC."""
     if not pub_date:
         return "N/A"
-    # Convert to EST for display
     try:
         if pub_date.tzinfo is None:
             pub_date = pub_date.replace(tzinfo=UTC)
-        pub_est = pub_date.astimezone(EST)
-        return pub_est.strftime("%m-%d-%Y / %H:%M EST")
+        pub_utc = pub_date.astimezone(UTC)
+        return pub_utc.strftime("%m-%d-%Y / %H:%M UTC")
     except:
         return pub_date.strftime("%m-%d-%Y / %H:%M")
 
