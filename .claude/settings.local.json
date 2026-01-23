@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(curl:*)",
-      "WebFetch(domain:www.europarl.europa.eu)"
+      "WebFetch(domain:www.europarl.europa.eu)",
+      "Bash(python src/main.py:*)"
     ]
   }
 }

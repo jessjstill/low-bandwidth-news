@@ -8,6 +8,8 @@ import os
 import sys
 import re
 import time
+import argparse
+from collections import defaultdict
 import pandas as pd
 import feedparser
 import anthropic
@@ -80,17 +82,18 @@ def format_pub_date(pub_date: datetime | None) -> str:
         return pub_date.strftime("%m-%d-%Y / %H:%M")
 
 
-def fetch_rss(url: str, category: str, source_name: str, max_items: int = 20) -> list:
-    """Fetch standard RSS/Atom feeds. Returns list of article dicts from today only."""
+def fetch_rss(url: str, category: str, source_name: str, max_items: int = 50, fetch_all: bool = False) -> list:
+    """Fetch standard RSS/Atom feeds. Returns list of article dicts."""
     try:
         feed = feedparser.parse(url)
         if feed.bozo and not feed.entries:
             return []
 
         articles = []
-        for entry in feed.entries[:max_items]:
+        entries = feed.entries if fetch_all else feed.entries[:max_items]
+        for entry in entries:
             pub_date = parse_pub_date(entry)
-            if not is_today(pub_date):
+            if not fetch_all and not is_today(pub_date):
                 continue
 
             title = getattr(entry, 'title', 'No Title')
@@ -112,15 +115,16 @@ def fetch_rss(url: str, category: str, source_name: str, max_items: int = 20) ->
         return []
 
 
-def fetch_atom(url: str, category: str, source_name: str, max_items: int = 20) -> list:
-    """Fetch Atom feeds (like ArXiv API). Returns list of article dicts from today only."""
+def fetch_atom(url: str, category: str, source_name: str, max_items: int = 50, fetch_all: bool = False) -> list:
+    """Fetch Atom feeds (like ArXiv API). Returns list of article dicts."""
     try:
         feed = feedparser.parse(url)
         articles = []
 
-        for entry in feed.entries[:max_items]:
+        entries = feed.entries if fetch_all else feed.entries[:max_items]
+        for entry in entries:
             pub_date = parse_pub_date(entry)
-            if not is_today(pub_date):
+            if not fetch_all and not is_today(pub_date):
                 continue
 
             title = getattr(entry, 'title', 'No Title')
@@ -146,15 +150,16 @@ def fetch_atom(url: str, category: str, source_name: str, max_items: int = 20) -
         return []
 
 
-def fetch_podcast(url: str, category: str, source_name: str, max_items: int = 20) -> list:
-    """Fetch podcast RSS feeds. Returns list of episode dicts from today only."""
+def fetch_podcast(url: str, category: str, source_name: str, max_items: int = 50, fetch_all: bool = False) -> list:
+    """Fetch podcast RSS feeds. Returns list of episode dicts."""
     try:
         feed = feedparser.parse(url)
         articles = []
 
-        for entry in feed.entries[:max_items]:
+        entries = feed.entries if fetch_all else feed.entries[:max_items]
+        for entry in entries:
             pub_date = parse_pub_date(entry)
-            if not is_today(pub_date):
+            if not fetch_all and not is_today(pub_date):
                 continue
 
             title = getattr(entry, 'title', 'No Title')
@@ -197,18 +202,18 @@ def fetch_scrape(url: str, category: str, source_name: str) -> list:
         return []
 
 
-def fetch_content(url: str, feed_type: str, category: str, source_name: str) -> list:
+def fetch_content(url: str, feed_type: str, category: str, source_name: str, fetch_all: bool = False) -> list:
     """Route to appropriate fetcher based on feed type."""
     feed_type = (feed_type or 'rss').lower().strip()
-    
+
     if feed_type == 'atom':
-        return fetch_atom(url, category, source_name)
+        return fetch_atom(url, category, source_name, fetch_all=fetch_all)
     elif feed_type == 'podcast':
-        return fetch_podcast(url, category, source_name)
+        return fetch_podcast(url, category, source_name, fetch_all=fetch_all)
     elif feed_type == 'scrape':
         return fetch_scrape(url, category, source_name)
     else:
-        return fetch_rss(url, category, source_name)
+        return fetch_rss(url, category, source_name, fetch_all=fetch_all)
 
 
 def generate_summaries(articles: list) -> list:
@@ -281,8 +286,65 @@ def escape_markdown(text: str) -> str:
     return text.replace('|', '\\|')
 
 
+def group_articles_by_date(articles: list) -> dict:
+    """Group articles by their publication date (YYYY-MM-DD)."""
+    grouped = defaultdict(list)
+    for article in articles:
+        pub_date = article.get('pub_date')
+        if pub_date:
+            date_key = pub_date.astimezone(UTC).date().strftime("%Y-%m-%d")
+        else:
+            date_key = "unknown"
+        grouped[date_key].append(article)
+    return grouped
+
+
+def write_briefing(articles: list, date_str: str, output_dir: str) -> str:
+    """Write a daily briefing markdown file for a specific date."""
+    # Sort by publication date (newest first)
+    articles.sort(key=lambda x: (x.get('pub_date') or datetime.min.replace(tzinfo=UTC)), reverse=True)
+
+    # Create table
+    table_lines = [
+        "| Date/Time | Category | Source | Title | Summary | Link |",
+        "|-----------|----------|--------|-------|---------|------|"
+    ]
+
+    for article in articles:
+        pub_date_str = format_pub_date(article.get('pub_date'))
+        category = escape_markdown(article['category'])
+        source = escape_markdown(article['source'])
+        title = escape_markdown(article['title'][:60] + '...' if len(article['title']) > 60 else article['title'])
+        summary = escape_markdown(article.get('summary', 'N/A'))
+        link = article['link']
+
+        table_lines.append(f"| {pub_date_str} | {category} | {source} | {title} | {summary} | [Link]({link}) |")
+
+    os.makedirs(output_dir, exist_ok=True)
+    filename = os.path.join(output_dir, f"{date_str}.md")
+
+    with open(filename, "w", encoding="utf-8") as f:
+        f.write(f"# 🗞️ Daily Briefing: {date_str}\n\n")
+        f.write(f"*Generated at {datetime.now(UTC).strftime('%H:%M')} UTC*\n\n")
+        f.write(f"**Total Articles:** {len(articles)}\n\n")
+        f.write("---\n\n")
+        f.write("\n".join(table_lines))
+        f.write("\n")
+
+    return filename
+
+
 def main():
+    parser = argparse.ArgumentParser(description="Low-Bandwidth News Aggregator")
+    parser.add_argument('--fetch-all', action='store_true',
+                        help='Fetch all available articles (not just today) and create separate briefings by date')
+    args = parser.parse_args()
+
+    fetch_all = args.fetch_all
+
     print("Starting News Aggregator...")
+    if fetch_all:
+        print("Mode: FETCH ALL (historical)")
     print(f"Date: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M')} UTC")
     print("-" * 50)
 
@@ -307,13 +369,13 @@ def main():
         category = row['Category']
         url = row['URL']
         feed_type = row.get('Type', 'rss')
-        
+
         if pd.isna(feed_type) or feed_type == '':
             feed_type = 'rss'
-        
+
         print(f"Fetching: {source_name} ({feed_type})...")
-        
-        articles = fetch_content(url, feed_type, category, source_name)
+
+        articles = fetch_content(url, feed_type, category, source_name, fetch_all=fetch_all)
         print(f"   Found {len(articles)} items")
         all_articles.extend(articles)
 
@@ -327,7 +389,7 @@ def main():
     # Generate summaries with Claude
     print("Generating summaries with Claude...")
     print("   (This may take a moment...)")
-    
+
     # Process in batches of 20 to avoid token limits
     batch_size = 20
     for i in range(0, len(all_articles), batch_size):
@@ -335,54 +397,40 @@ def main():
         print(f"   Processing articles {i+1}-{min(i+batch_size, len(all_articles))}...")
         generate_summaries(batch)
 
-    # Build Markdown table
-    print("\nBuilding Markdown table...")
-    
-    # Sort by publication date (newest first), then by category
-    all_articles.sort(key=lambda x: (x.get('pub_date') or datetime.min), reverse=True)
-    
-    # Create table
-    table_lines = [
-        "| Date/Time | Category | Source | Title | Summary | Link |",
-        "|-----------|----------|--------|-------|---------|------|"
-    ]
-
-    for article in all_articles:
-        pub_date_str = format_pub_date(article.get('pub_date'))
-        category = escape_markdown(article['category'])
-        source = escape_markdown(article['source'])
-        title = escape_markdown(article['title'][:60] + '...' if len(article['title']) > 60 else article['title'])
-        summary = escape_markdown(article.get('summary', 'N/A'))
-        link = article['link']
-
-        table_lines.append(f"| {pub_date_str} | {category} | {source} | {title} | {summary} | [Link]({link}) |")
-
-    # Generate output to Daily Briefings folder
-    # Archive dates: 2025-01-20 to 2026-01-20 go in Archive subfolder
-    # Current dates: 2026-01-21 onwards go in main Daily Briefings folder
-    today_date = datetime.now(UTC).date()
-    today = today_date.strftime("%Y-%m-%d")
-
-    archive_start = datetime(2025, 1, 20, tzinfo=UTC).date()
-    archive_end = datetime(2026, 1, 20, tzinfo=UTC).date()
-
+    # Output directory
     briefings_dir = os.path.join(base_dir, "Daily Briefings")
-    if archive_start <= today_date <= archive_end:
-        briefings_dir = os.path.join(briefings_dir, "Archive")
 
-    os.makedirs(briefings_dir, exist_ok=True)
-    filename = os.path.join(briefings_dir, f"{today}.md")
+    if fetch_all:
+        # Group by date and write separate files
+        print("\nGrouping articles by date...")
+        grouped = group_articles_by_date(all_articles)
 
-    with open(filename, "w", encoding="utf-8") as f:
-        f.write(f"# 🗞️ Daily Briefing: {today}\n\n")
-        f.write(f"*Generated at {datetime.now(UTC).strftime('%H:%M')} UTC*\n\n")
-        f.write(f"**Total Articles:** {len(all_articles)}\n\n")
-        f.write("---\n\n")
-        f.write("\n".join(table_lines))
-        f.write("\n")
+        # Sort dates (newest first)
+        sorted_dates = sorted(grouped.keys(), reverse=True)
+        print(f"Found articles across {len(sorted_dates)} different dates")
 
-    print(f"\nSuccess! Created {filename}")
-    print(f"{len(all_articles)} articles summarized.")
+        print("\nWriting briefings...")
+        for date_str in sorted_dates:
+            articles = grouped[date_str]
+            if date_str == "unknown":
+                print(f"   Skipping {len(articles)} articles with unknown dates")
+                continue
+            filename = write_briefing(articles, date_str, briefings_dir)
+            print(f"   {date_str}: {len(articles)} articles -> {filename}")
+
+        print(f"\nSuccess! Created {len(sorted_dates)} daily briefings")
+        print(f"Total: {len(all_articles)} articles summarized.")
+    else:
+        # Original behavior: single file for today
+        print("\nBuilding Markdown table...")
+
+        today_date = datetime.now(UTC).date()
+        today = today_date.strftime("%Y-%m-%d")
+
+        filename = write_briefing(all_articles, today, briefings_dir)
+
+        print(f"\nSuccess! Created {filename}")
+        print(f"{len(all_articles)} articles summarized.")
 
 
 if __name__ == "__main__":
