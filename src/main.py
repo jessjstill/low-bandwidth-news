@@ -7,11 +7,13 @@ Outputs a Markdown table with one row per article.
 import os
 import sys
 import re
+import ssl
 import time
 import argparse
 from collections import defaultdict
 import pandas as pd
 import feedparser
+import requests
 import anthropic
 import trafilatura
 from datetime import datetime, timedelta
@@ -82,10 +84,28 @@ def format_pub_date(pub_date: datetime | None) -> str:
         return pub_date.strftime("%m-%d-%Y / %H:%M")
 
 
+def fetch_feed_content(url: str) -> feedparser.FeedParserDict:
+    """Fetch and parse a feed, handling SSL certificate issues."""
+    # First try direct parsing
+    feed = feedparser.parse(url)
+
+    # If SSL error, retry with requests (which can skip verification)
+    if feed.bozo and 'CERTIFICATE_VERIFY_FAILED' in str(feed.bozo_exception):
+        try:
+            response = requests.get(url, verify=False, timeout=30)
+            response.raise_for_status()
+            feed = feedparser.parse(response.content)
+        except requests.RequestException as e:
+            # Return the original failed feed
+            pass
+
+    return feed
+
+
 def fetch_rss(url: str, category: str, source_name: str, max_items: int = 50, fetch_all: bool = False) -> list:
     """Fetch standard RSS/Atom feeds. Returns list of article dicts."""
     try:
-        feed = feedparser.parse(url)
+        feed = fetch_feed_content(url)
         if feed.bozo and not feed.entries:
             return []
 
@@ -118,7 +138,7 @@ def fetch_rss(url: str, category: str, source_name: str, max_items: int = 50, fe
 def fetch_atom(url: str, category: str, source_name: str, max_items: int = 50, fetch_all: bool = False) -> list:
     """Fetch Atom feeds (like ArXiv API). Returns list of article dicts."""
     try:
-        feed = feedparser.parse(url)
+        feed = fetch_feed_content(url)
         articles = []
 
         entries = feed.entries if fetch_all else feed.entries[:max_items]
@@ -153,7 +173,7 @@ def fetch_atom(url: str, category: str, source_name: str, max_items: int = 50, f
 def fetch_podcast(url: str, category: str, source_name: str, max_items: int = 50, fetch_all: bool = False) -> list:
     """Fetch podcast RSS feeds. Returns list of episode dicts."""
     try:
-        feed = feedparser.parse(url)
+        feed = fetch_feed_content(url)
         articles = []
 
         entries = feed.entries if fetch_all else feed.entries[:max_items]

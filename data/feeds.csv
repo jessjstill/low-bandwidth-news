@@ -2,7 +2,6 @@ Category,Source Name,URL,Type
 Research,ArXiv AI & Crypto,https://export.arxiv.org/api/query?search_query=all:blockchain+OR+all:bitcoin+OR+all:%22digital+assets%22+OR+all:%22zero+knowledge%22+OR+all:tokenization+OR+all:cryptocurrency+OR+all:LLM+OR+all:%22generative+ai%22+OR+all:%22artificial+intelligence%22&sortBy=submittedDate&sortOrder=descending&max_results=5,atom
 Crypto,Vitalik Buterin,https://vitalik.eth.limo/feed.xml,rss
 Tech,TechPolicy Press,https://techpolicy.press/rss/feed.xml,rss
-Research,DRC Research,https://thedrcenter.org/research/,scrape
 Crypto,The Block,https://www.theblock.co/rss.xml,rss
 Macro,The Block's Forward Guidance Podcast,https://feeds.megaphone.fm/forwardguidance,podcast
 Macro,Bell Curve,https://feeds.megaphone.fm/bellcurve,podcast
@@ -14,4 +13,4 @@ US Gov,GAO Reports & Comptroller General Decisions,https://www.govinfo.gov/rss/g
 EU Tech Policy,EU Parliament – Internal Market & Industry,https://www.europarl.europa.eu/rss/topic/909/en.xml,rss
 EU Finance,EU Parliament – Economic & Monetary Affairs,https://www.europarl.europa.eu/rss/topic/908/en.xml,rss
 EU Tech Policy,European Commission – Internal Market (DG GROW),https://ec.europa.eu/newsroom/growth/feed?tpa_id=29399,rss
-EU Finance,European Central Bank – Press & Publications,https://www.ecb.europa.eu/press/pr/date/html/index.en.html,scrape
+EU Finance,European Central Bank – Press & Publications,https://www.ecb.europa.eu/rss/press.html,rss

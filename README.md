@@ -6,7 +6,7 @@ A lightweight RSS feed aggregator that uses Claude AI to create curated daily br
 
 - 📡 **Multi-format support**: RSS, Atom (ArXiv), podcasts, and web scraping
 - 🧠 **AI-powered summaries**: Claude analyzes and organizes content
-- 📊 **24 curated sources**: Government, EU policy, crypto, and research feeds
+- 📊 **15 curated sources**: Government, EU policy, crypto, and research feeds
 - 🌐 **GitHub Pages ready**: Deploy as a static website
 - ⚡ **Low bandwidth**: Fetches only metadata, not full content
 
@@ -60,15 +60,16 @@ low-bandwidth-news/
 
 ## Feed Sources
 
-The aggregator monitors 24 sources across categories:
+The aggregator monitors 15 sources across categories:
 
 | Category | Sources |
 |----------|---------|
-| Research | ArXiv AI/Crypto, DRC Blog |
-| Crypto | Vitalik, Kiwi News, The Block, Unchained |
-| Tech Policy | TechPolicy Press, Tracker Updates |
-| US Gov | Federal Register, Congressional Bills, GAO |
-| EU Policy | Parliament Press, Agendas, ECB |
+| Research | ArXiv AI/Crypto |
+| Crypto | Vitalik Buterin, The Block, Unchained |
+| Tech | TechPolicy Press |
+| US Gov | Federal Register, Congressional Bills, Congressional Record, GAO |
+| EU Tech Policy | EU Parliament (Internal Market), European Commission (DG GROW) |
+| EU Finance | EU Parliament (Economic Affairs), ECB |
 | Macro | Forward Guidance, Bell Curve podcasts |
 
 Edit `data/feeds.csv` to add or modify sources.
